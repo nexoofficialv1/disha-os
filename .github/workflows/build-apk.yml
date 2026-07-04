@@ -1,0 +1,81 @@
+name: Build DISHA APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Show repository files
+        run: |
+          echo "Repository root:"
+          pwd
+          echo "Files:"
+          ls -la
+          echo "Searching Flutter pubspec.yaml..."
+          find . -name pubspec.yaml -not -path "*/.dart_tool/*"
+
+      - name: Find Flutter app directory
+        run: |
+          PUBSPEC_PATH=$(find . -name pubspec.yaml -not -path "*/.dart_tool/*" | head -n 1)
+
+          if [ -z "$PUBSPEC_PATH" ]; then
+            echo "No pubspec.yaml found. Flutter project not uploaded correctly."
+            exit 1
+          fi
+
+          APP_DIR=$(dirname "$PUBSPEC_PATH")
+          echo "Flutter app found at: $APP_DIR"
+          echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Ensure Android platform exists
+        run: |
+          cd "$APP_DIR"
+          if [ ! -d "android" ]; then
+            flutter create . --platforms=android
+          fi
+
+      - name: Install Flutter dependencies
+        run: |
+          cd "$APP_DIR"
+          flutter pub get
+
+      - name: Analyze Flutter code
+        run: |
+          cd "$APP_DIR"
+          flutter analyze
+
+      - name: Build debug APK
+        run: |
+          cd "$APP_DIR"
+          flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DISHA-v1-debug-apk
+          path: ${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-debug.apk
